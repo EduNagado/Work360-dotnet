@@ -1,16 +1,26 @@
-namespace Work360.Domain.Entity;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-public class Meeting
+namespace Work360.Domain.Entity
 {
-    public string MeetingID { get; set; }
-    
-    public List<User> Participants { get; set; }
 
-    public string Title { get; set; }
+    [Table("Work360_Meeting")]
 
-    public DateTime Date { get; set; }
+    public class Meeting
+    {
+        [Key]
+        public required Guid MeetingID { get; set; }
 
-    public string Description { get; set; }
+        public required Guid UserID { get; set; }
 
-    
+        public required string Title { get; set; }
+
+        public required DateTime StartDate { get; set; } = DateTime.UtcNow;
+
+        public required string Description { get; set; }
+
+        public DateTime? EndDate { get; set; }
+        public int? minutesDuration { get; set; }
+
+    }
 }
