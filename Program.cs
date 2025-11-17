@@ -1,7 +1,12 @@
-using System.Reflection;
+using System.Text.Json;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Oracle.ManagedDataAccess.Client;
 using Work360.Infrastructure.Context;
+using Work360.Infrastructure.Health;
 using Work360.Infrastructure.Services;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +14,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 
 builder.Services.AddScoped<IHateoasService, HateoasService>();
+
+
+
+builder.Services.AddHealthChecks()
+    .AddCheck("Oracle", new OracleHealthCheck(
+        builder.Configuration.GetConnectionString("Oracle")
+    ));
+
 
 // Adicione versionamento de API
 builder.Services.AddApiVersioning(options =>
@@ -37,6 +50,31 @@ builder.Services.AddDbContext<Work360Context>(options =>
 });
 
 var app = builder.Build();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var result = JsonSerializer.Serialize(new
+        {
+            status = report.Status.ToString(),
+            timestamp = DateTime.UtcNow,
+            duration = report.TotalDuration,
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                duration = e.Value.Duration,
+                exception = e.Value.Exception?.Message,
+                data = e.Value.Data
+            })
+        }, new JsonSerializerOptions { WriteIndented = true });
+        await context.Response.WriteAsync(result);
+    }
+});
+
 
 // Habilitar Swagger apenas em desenvolvimento (opcional)
 if (app.Environment.IsDevelopment())
