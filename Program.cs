@@ -6,6 +6,7 @@ using Oracle.ManagedDataAccess.Client;
 using Work360.Infrastructure.Context;
 using Work360.Infrastructure.Health;
 using Work360.Infrastructure.Services;
+using Work360.Infrastructure;
 
 // OpenTelemetry
 using OpenTelemetry;
@@ -14,7 +15,7 @@ using OpenTelemetry.Resources;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Adicionar serviços de controllers
+// Controllers
 builder.Services.AddControllers();
 
 builder.Services.AddScoped<IHateoasService, HateoasService>();
@@ -43,6 +44,21 @@ builder.Services.AddVersionedApiExplorer(options =>
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
+
+// OPEN TELEMETRY - APENAS TRACING
+builder.Services.AddOpenTelemetry()
+    .WithTracing(trace =>
+    {
+        trace
+            .AddSource("Work360.API") // ActivitySource
+            .SetResourceBuilder(
+                ResourceBuilder.CreateDefault()
+                    .AddService("Work360.API")
+            )
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddConsoleExporter(); // Exibe spans no console
+    });
 
 // SWAGGER
 builder.Services.AddEndpointsApiExplorer();
@@ -76,6 +92,7 @@ app.MapHealthChecks("/health", new HealthCheckOptions
                 data = e.Value.Data
             })
         }, new JsonSerializerOptions { WriteIndented = true });
+
         await context.Response.WriteAsync(result);
     }
 });

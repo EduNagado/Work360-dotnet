@@ -1,4 +1,5 @@
 ﻿using System.Threading.Tasks;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
@@ -17,10 +18,12 @@ namespace Work360.Controller
     {
         private readonly Work360Context _context;
         private readonly IHateoasService _hateoasService;
-        private readonly ILogger _logger;
+        private readonly ILogger<ReportController> _logger;
+
+        public static readonly ActivitySource ActivitySource = new ActivitySource("Work360");
 
 
-        public ReportController(Work360Context context, IHateoasService hateoasService, ILogger logger)
+        public ReportController(Work360Context context, IHateoasService hateoasService, ILogger<ReportController> logger)
         {
             _context = context;
             _hateoasService = hateoasService;
@@ -54,6 +57,12 @@ namespace Work360.Controller
 
             )
         {
+            var activity = ActivitySource.StartActivity("ReportController.GetReport");
+
+            activity?.SetTag("report.userId", userId);
+            activity?.SetTag("report.startDate", StartDate);
+            activity?.SetTag("report.endDate", EndDate);
+
             _logger.LogInformation("Gerando relatório para o usuário {UserId} de {StartDate} a {EndDate}", userId, StartDate, EndDate);
             var paginParams = new PagingParameters { PageNumber = pageNumber, PageSize = pageSize };
 
@@ -97,6 +106,8 @@ namespace Work360.Controller
                 Insights = null
             };
 
+            activity?.SetTag("report.report", report.ToString());
+
             var result = new PagedResult<Report>
             {
                 Item = report,
@@ -104,6 +115,8 @@ namespace Work360.Controller
                 PageSize = paginParams.PageSize,
                 TotalItems = totalItens
             };
+
+            activity?.SetTag("report.result", result.ToString());
 
             // Adicionar links HATEOAS
             result.Links = _hateoasService.GeneratePaginationLinks(result, "Report", Url);

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Work360.Domain.DTO;
 using Work360.Domain.Entity;
@@ -15,6 +16,8 @@ namespace Work360.Controller
         private readonly Work360Context _context;
         private readonly IHateoasService _hateoasService;
         private readonly ILogger<TasksController> _logger;
+
+        public static readonly ActivitySource ActivitySource = new ActivitySource("Work360");
 
         public TasksController(Work360Context context, IHateoasService hateoasService, ILogger<TasksController> logger)
         {
@@ -37,6 +40,11 @@ namespace Work360.Controller
             [FromQuery] int pageSize = 10
             )
         {
+            var activity = ActivitySource.StartActivity("TasksController.GetTasks");
+
+            activity?.SetTag("tasks.pageNumber", pageNumber);
+            activity?.SetTag("tasks.pageSize", pageSize);
+
             _logger.LogInformation("Listando tarefas: Página {Page}, Tamanho {Size}", pageNumber, pageSize);
             var paginParams = new PagingParameters { PageNumber = pageNumber, PageSize = pageSize };
 
@@ -45,6 +53,9 @@ namespace Work360.Controller
                 .Skip((paginParams.PageNumber - 1) * paginParams.PageSize)
                 .Take(paginParams.PageSize)
                 .ToListAsync();
+
+            activity?.SetTag("tasks.count", Taskss.Count);
+            activity?.SetTag("tasks.totalItems", totalItens);
 
             var result = new PagedResult<Tasks>
             {
@@ -56,6 +67,8 @@ namespace Work360.Controller
 
             // Adicionar links HATEOAS
             result.Links = _hateoasService.GeneratePaginationLinks(result, "Tasks", Url);
+
+            activity?.SetTag("tasks.result", result.ToString());
 
             return Ok(result);
         }
@@ -70,13 +83,20 @@ namespace Work360.Controller
         [HttpGet("{id}", Name = "GetTask")]
         public async Task<ActionResult<Tasks>> GetTasks(Guid id)
         {
+            var activity = ActivitySource.StartActivity("TasksController.GetTask");
+
+            activity?.SetTag("tasks.id", id);
+
             _logger.LogInformation("Buscando tarefa com ID: {TasksId}", id);
             var Tasks = await _context.Tasks.FindAsync(id);
 
             if (Tasks == null)
             {
+                activity?.SetTag("tasks.notFound", true);
                 return NotFound(new { error = "Usuário não encontrado", TasksId = id });
             }
+
+            activity?.SetTag("tasks.found", true);
 
             return Ok(Tasks);
         }
@@ -93,9 +113,15 @@ namespace Work360.Controller
         [HttpPut("{id}", Name = "UpdateTasks")]
         public async Task<IActionResult> PutTasks(Guid id, Tasks Tasks)
         {
+            var activity = ActivitySource.StartActivity("TasksController.UpdateTasks");
+
+            activity?.SetTag("tasks.id", id);
+            activity?.SetTag("tasks.tasks", Tasks.ToString());
+
             _logger.LogInformation("Atualizando tarefa com ID: {TasksId}", id);
             if (id != Tasks.TaskID)
             {
+                activity?.SetTag("tasks.badRequest", true);
                 return BadRequest();
             }
 
@@ -109,6 +135,7 @@ namespace Work360.Controller
             {
                 if (!TasksExists(id))
                 {
+                    activity?.SetTag("tasks.notFound", true);
                     return NotFound();
                 }
                 else
@@ -116,6 +143,8 @@ namespace Work360.Controller
                     throw;
                 }
             }
+
+            activity?.SetTag("tasks.updated", true);
 
             return NoContent();
         }
@@ -130,9 +159,15 @@ namespace Work360.Controller
         [HttpPost(Name = "CreateTasks")]
         public async Task<ActionResult<Tasks>> PostTasks(Tasks Tasks)
         {
+            var activity = ActivitySource.StartActivity("TasksController.CreateTasks");
+
+            activity?.SetTag("tasks.tasks", Tasks.ToString());
+
             _logger.LogInformation("Criando nova tarefa");
             _context.Tasks.Add(Tasks);
             await _context.SaveChangesAsync();
+
+            activity?.SetTag("tasks.created", true);
 
             return CreatedAtAction("GetTasks", new { id = Tasks.TaskID }, Tasks);
         }
@@ -147,21 +182,32 @@ namespace Work360.Controller
         [HttpDelete("{id}", Name = "DeleteTasks")]
         public async Task<IActionResult> DeleteTasks(Guid id)
         {
+            var activity = ActivitySource.StartActivity("TasksController.DeleteTasks");
+
+            activity?.SetTag("tasks.id", id);
+
             _logger.LogInformation("Removendo tarefa com ID: {TasksId}", id);
             var Tasks = await _context.Tasks.FindAsync(id);
             if (Tasks == null)
             {
+                activity?.SetTag("tasks.notFound", true);
                 return NotFound();
             }
 
             _context.Tasks.Remove(Tasks);
             await _context.SaveChangesAsync();
 
+            activity?.SetTag("tasks.deleted", true);
+
             return NoContent();
         }
 
         private bool TasksExists(Guid id)
         {
+            var activity = ActivitySource.StartActivity("TasksController.TasksExists");
+
+            activity?.SetTag("tasks.id", id);
+
             _logger.LogInformation("Verificando existência da tarefa com ID: {TasksId}", id);
             return _context.Tasks.Any(e => e.TaskID == id);
         }

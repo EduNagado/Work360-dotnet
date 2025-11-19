@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Work360.Domain.DTO;
 using Work360.Domain.Entity;
@@ -15,6 +16,9 @@ namespace Work360.Controller
         private readonly Work360Context _context;
         private readonly IHateoasService _hateoasService;
         private readonly ILogger<MeetingController> _logger;
+
+        public static readonly ActivitySource ActivitySource = new ActivitySource("Work360");
+
 
         public MeetingController(Work360Context context, IHateoasService hateoasService, ILogger<MeetingController> logger)
         {
@@ -37,14 +41,20 @@ namespace Work360.Controller
             [FromQuery] int pageSize = 10
             )
         {
-            _logger.LogInformation("Listando reuniões: Página {Page}, Tamanho {Size}", pageNumber, pageSize);
+            var activity = ActivitySource.StartActivity("MeetingController.GetMeetings");
+
             var paginParams = new PagingParameters { PageNumber = pageNumber, PageSize = pageSize };
+
+            _logger.LogInformation("Listando reuniões: Página {Page}, Tamanho {Size}", pageNumber, pageSize);
 
             var totalItens = await _context.Meetings.CountAsync();
             var Meetings = await _context.Meetings
                 .Skip((paginParams.PageNumber - 1) * paginParams.PageSize)
                 .Take(paginParams.PageSize)
                 .ToListAsync();
+            
+            activity?.SetTag("meetings.count", Meetings.Count);
+            activity?.SetTag("meetings.totalItems", totalItens);
 
             var result = new PagedResult<Meeting>
             {
@@ -56,6 +66,8 @@ namespace Work360.Controller
 
             // Adicionar links HATEOAS
             result.Links = _hateoasService.GeneratePaginationLinks(result, "Meeting", Url);
+
+            activity?.SetTag("meetings.result", result.ToString());
 
             return Ok(result);
         }
@@ -70,13 +82,20 @@ namespace Work360.Controller
         [HttpGet("{id}", Name = "GetMeeting")]
         public async Task<ActionResult<Meeting>> GetMeeting(Guid id)
         {
+            var activity = ActivitySource.StartActivity("MeetingController.GetMeeting");
+
             _logger.LogInformation("Obtendo reunião com ID: {MeetingId}", id);
+            activity?.SetTag("meeting.id", id);
+
             var Meeting = await _context.Meetings.FindAsync(id);
 
             if (Meeting == null)
             {
+                activity?.SetTag("meeting.notFound", true);
                 return NotFound(new { error = "Usuário não encontrado", MeetingId = id });
             }
+
+            activity?.SetTag("meeting.found", true);
 
             return Ok(Meeting);
         }
@@ -93,9 +112,15 @@ namespace Work360.Controller
         [HttpPut("{id}", Name = "UpdateMeeting")]
         public async Task<IActionResult> PutMeeting(Guid id, Meeting Meeting)
         {
+            var activity = ActivitySource.StartActivity("MeetingController.UpdateMeeting");
+
+            activity?.SetTag("meeting.id", id);
+            activity?.SetTag("meeting.meeting", Meeting.ToString());
+
             _logger.LogInformation("Atualizando reunião com ID: {MeetingId}", id);
             if (id != Meeting.MeetingID)
             {
+                activity?.SetTag("meeting.badRequest", true);
                 return BadRequest();
             }
 
@@ -116,7 +141,7 @@ namespace Work360.Controller
                     throw;
                 }
             }
-
+            activity?.SetTag("meeting.updated", true);
             return NoContent();
         }
 
@@ -130,9 +155,15 @@ namespace Work360.Controller
         [HttpPost(Name = "CreateMeeting")]
         public async Task<ActionResult<Meeting>> PostMeeting(Meeting Meeting)
         {
+            var activity = ActivitySource.StartActivity("MeetingController.CreateMeeting");
+
+            activity?.SetTag("meeting.meeting", Meeting.ToString());
+
             _logger.LogInformation("Criando nova reunião");
             _context.Meetings.Add(Meeting);
             await _context.SaveChangesAsync();
+
+            activity?.SetTag("meeting.created", true);
 
             return CreatedAtAction("GetMeeting", new { id = Meeting.MeetingID }, Meeting);
         }
@@ -147,15 +178,22 @@ namespace Work360.Controller
         [HttpDelete("{id}", Name = "DeleteMeeting")]
         public async Task<IActionResult> DeleteMeeting(Guid id)
         {
+            var activity = ActivitySource.StartActivity("MeetingController.DeleteMeeting");
+
+            activity?.SetTag("meeting.id", id);
+
             _logger.LogInformation("Removendo reunião com ID: {MeetingId}", id);
             var Meeting = await _context.Meetings.FindAsync(id);
             if (Meeting == null)
             {
-                return NotFound();
+                activity?.SetTag("meeting.notFound", true);
+                return NotFound(new { error = "Reunião não encontrada", MeetingId = id });
             }
 
             _context.Meetings.Remove(Meeting);
             await _context.SaveChangesAsync();
+
+            activity?.SetTag("meeting.deleted", true);
 
             return NoContent();
         }

@@ -16,6 +16,7 @@ namespace Work360.Controller
         private readonly Work360Context _context;
         private readonly IHateoasService _hateoasService;
         private readonly ILogger<EventsController> _logger;
+        public static readonly ActivitySource ActivitySource = new ActivitySource("Work360");
 
 
         public EventsController(Work360Context context, IHateoasService hateoasService, ILogger<EventsController> logger)
@@ -39,15 +40,21 @@ namespace Work360.Controller
             [FromQuery] int pageSize = 10
             )
         {
-            _logger.LogInformation("Listando eventos: Página {Page}, Tamanho {Size}", pageNumber, pageSize);
+            var activity = ActivitySource.StartActivity("EventsController.GetEvents");
 
             var paginParams = new PagingParameters { PageNumber = pageNumber, PageSize = pageSize };
+
+            _logger.LogInformation("Listando eventos: Página {Page}, Tamanho {Size}", pageNumber, pageSize);
+
 
             var totalItens = await _context.Events.CountAsync();
             var Events = await _context.Events
                 .Skip((paginParams.PageNumber - 1) * paginParams.PageSize)
                 .Take(paginParams.PageSize)
                 .ToListAsync();
+
+            activity?.SetTag("events.count", Events.Count);
+            activity?.SetTag("events.totalItems", totalItens);
 
             var result = new PagedResult<Events>
             {
@@ -73,6 +80,8 @@ namespace Work360.Controller
         [HttpGet("{id}", Name = "GetEvent")]
         public async Task<ActionResult<Events>> GetEvents(Guid id)
         {
+            var activity = ActivitySource.StartActivity("EventsController.GetEvent");
+
             _logger.LogInformation("Obtendo evento com ID: {EventId}", id);
 
             var Events = await _context.Events.FindAsync(id);
@@ -81,6 +90,9 @@ namespace Work360.Controller
             {
                 return NotFound(new { error = "Usuário não encontrado", EventsId = id });
             }
+
+            activity?.SetTag("event.found", true);
+
 
             return Ok(Events);
         }
@@ -97,7 +109,10 @@ namespace Work360.Controller
         [HttpPut("{id}", Name = "UpdateEvents")]
         public async Task<IActionResult> PutEvents(Guid id, Events Events)
         {
-            _logger.LogInformation("Atualizando evento com ID: {EventId}", id);
+            using var activity = ActivitySource.StartActivity("EventsController.CreateEvent");
+            activity?.SetTag("user", Events.ToString());
+
+            _logger.LogInformation("Criando um novo evento para o usuário ID: {UserId}", Events.UserID);
 
             if (id != Events.EventID)
             {
@@ -122,6 +137,9 @@ namespace Work360.Controller
                 }
             }
 
+            activity?.SetTag("event.found", true);
+
+
             return NoContent();
         }
 
@@ -135,9 +153,16 @@ namespace Work360.Controller
         [HttpPost(Name = "CreateEvents")]
         public async Task<ActionResult<Events>> PostEvents(Events Events)
         {
+            using var activity = ActivitySource.StartActivity("EventsController.CreateEvent");
+            activity?.SetTag("user:", Events.ToString());
+
             _logger.LogInformation("Criando um novo evento para o usuário ID: {UserId}", Events.UserID);
+
             _context.Events.Add(Events);
             await _context.SaveChangesAsync();
+
+            activity?.SetTag("event:", Events.ToString());
+
 
             return CreatedAtAction("GetEvents", new { id = Events.EventID }, Events);
         }
@@ -152,10 +177,14 @@ namespace Work360.Controller
         [HttpDelete("{id}", Name = "DeleteEvents")]
         public async Task<IActionResult> DeleteEvents(Guid id)
         {
+            using var activity = ActivitySource.StartActivity("EventsController.DeleteEvents");
+
             _logger.LogInformation("Removendo evento com ID: {EventId}", id);
             var Events = await _context.Events.FindAsync(id);
+
             if (Events == null)
             {
+                activity?.SetTag("event:", Events.ToString());
                 return NotFound();
             }
 

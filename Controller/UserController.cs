@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Work360.Domain.DTO;
 using Work360.Domain.Entity;
@@ -15,6 +16,7 @@ namespace Work360.Controller
         private readonly Work360Context _context;
         private readonly IHateoasService _hateoasService;
         private readonly ILogger<UserController> _logger;
+        public static readonly ActivitySource ActivitySource = new ActivitySource("Work360");
 
         public UserController(Work360Context context, IHateoasService hateoasService, ILogger<UserController> logger)
         {
@@ -36,9 +38,15 @@ namespace Work360.Controller
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10
             )
-        { 
-            _logger.LogInformation("Listando usuários: Página {Page}, Tamanho {Size}", pageNumber, pageSize);
+        {
+            var activity = ActivitySource.StartActivity("UserController.GetUsers");
+
+            activity?.SetTag("users.pageNumber", pageNumber);
+            activity?.SetTag("users.pageSize", pageSize);
+
             var paginParams = new PagingParameters { PageNumber = pageNumber, PageSize = pageSize };
+
+            _logger.LogInformation("Listando usuários: Página {Page}, Tamanho {Size}", pageNumber, pageSize);
 
             var totalItens = await _context.Users.CountAsync();         
             var users =  await _context.Users
@@ -57,6 +65,8 @@ namespace Work360.Controller
             // Adicionar links HATEOAS
             result.Links = _hateoasService.GeneratePaginationLinks(result, "User", Url);
 
+            activity?.SetTag("users.result", result.ToString());
+
             return Ok(result);
         }
 
@@ -70,13 +80,20 @@ namespace Work360.Controller
         [HttpGet("{id}", Name = "GetUser")]
         public async Task<ActionResult<User>> GetUser(Guid id)
         {
+            var activity = ActivitySource.StartActivity("UserController.GetUser");
+
+            activity?.SetTag("users.id", id);
+
             _logger.LogInformation("Buscando usuário com ID: {UserId}", id);
             var user = await _context.Users.FindAsync(id);
 
             if (user == null)
             {
+                activity?.SetTag("users.notFound", true);
                 return NotFound(new { error = "Usuário não encontrado", userId = id });
             }
+
+            activity?.SetTag("users.found", true);
 
             return Ok(user);
         }
@@ -92,7 +109,9 @@ namespace Work360.Controller
         /// <response code="500">Internal server error</response>
         [HttpPut("{id}", Name = "UpdateUser")]
         public async Task<IActionResult> PutUser(Guid id, User user)
-        {
+        {   
+            var activity = ActivitySource.StartActivity("UserController.UpdateUser");
+            activity?.SetTag("users.id", id);
             _logger.LogInformation("Atualizando usuário com ID: {UserId}", id);
             if (id != user.UserID)
             {
@@ -117,6 +136,8 @@ namespace Work360.Controller
                 }
             }
 
+            activity?.SetTag("users.updated", true);
+
             return NoContent();
         }
 
@@ -129,11 +150,14 @@ namespace Work360.Controller
         /// <response code="500">Internal server error</response>
         [HttpPost(Name = "CreateUser")]
         public async Task<ActionResult<User>> PostUser(User user)
-        {
+        {   
+            var activity = ActivitySource.StartActivity("UserController.CreateUser");
+            activity?.SetTag("users.user", user.ToString());
+
             _logger.LogInformation("Criando novo usuário");
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
-
+            activity?.SetTag("users.created", true);
             return CreatedAtAction("GetUser", new { id = user.UserID }, user);
         }
 
@@ -147,21 +171,30 @@ namespace Work360.Controller
         [HttpDelete("{id}", Name = "DeleteUser")]
         public async Task<IActionResult> DeleteUser(Guid id)
         {
+            var activity = ActivitySource.StartActivity("UserController.DeleteUser");
+            activity?.SetTag("users.id", id);
+
             _logger.LogInformation("Removendo usuário com ID: {UserId}", id);
             var user = await _context.Users.FindAsync(id);
             if (user == null)
             {
+                activity?.SetTag("users.notFound", true);
                 return NotFound();
             }
 
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
 
+            activity?.SetTag("users.deleted", true);
+
             return NoContent();
         }
 
         private bool UserExists(Guid id)
         {
+            var activity = ActivitySource.StartActivity("UserController.UserExists");
+            activity?.SetTag("users.id", id);
+
             _logger.LogInformation("Verificando existência do usuário com ID: {UserId}", id);
             return _context.Users.Any(e => e.UserID == id);
         }
