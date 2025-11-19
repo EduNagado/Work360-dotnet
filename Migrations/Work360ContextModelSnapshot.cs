@@ -28,10 +28,10 @@ namespace Work360.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("RAW(16)");
 
-                    b.Property<int?>("Duration")
+                    b.Property<int>("Duration")
                         .HasColumnType("NUMBER(10)");
 
-                    b.Property<DateTime?>("EndDate")
+                    b.Property<DateTime>("EndDate")
                         .HasColumnType("TIMESTAMP(7)");
 
                     b.Property<string>("EventType")
@@ -73,7 +73,7 @@ namespace Work360.Migrations
                     b.Property<Guid>("UserID")
                         .HasColumnType("RAW(16)");
 
-                    b.Property<int?>("minutesDuration")
+                    b.Property<int>("minutesDuration")
                         .HasColumnType("NUMBER(10)");
 
                     b.HasKey("MeetingID");

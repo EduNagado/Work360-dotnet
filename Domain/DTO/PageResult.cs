@@ -12,6 +12,11 @@
         public IEnumerable<T> Items { get; set; } = new List<T>();
 
         /// <summary>
+        /// item da página atual
+        /// </summary>
+        public T? Item { get; set; }
+
+        /// <summary>
         /// Página atual
         /// </summary>
         public int CurrentPage { get; set; }
