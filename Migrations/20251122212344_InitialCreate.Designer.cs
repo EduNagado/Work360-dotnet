@@ -12,7 +12,7 @@ using Work360.Infrastructure.Context;
 namespace Work360.Migrations
 {
     [DbContext(typeof(Work360Context))]
-    [Migration("20251119180354_InitialCreate")]
+    [Migration("20251122212344_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
